@@ -1,0 +1,4 @@
+# requirements.txt
+requests
+python-dotenv
+python-telegram-bot

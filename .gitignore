@@ -1,0 +1,30 @@
+# 忽略Python虚拟环境
+.venv/
+venv/
+ENV/
+
+# 忽略配置文件 (包含敏感信息)
+.env
+
+# 忽略Python的缓存文件
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# 忽略生成的临时文件和结果文件
+*.log
+new_ip_test_result.csv
+old_ip_test_result.csv
+ip.txt
+api_temp.txt
+final_ip_list.txt
+
+# 忽略常见的IDE/编辑器配置文件
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?

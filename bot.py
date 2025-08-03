@@ -8,7 +8,6 @@ from telegram import Update, Bot
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
 # --- 配置加载 ---
-# 从 .env 文件加载环境变量
 load_dotenv()
 TOKEN = os.getenv("TG_BOT_TOKEN")
 
@@ -18,11 +17,12 @@ MAIN_PY_SCRIPT = BASE_DIR / "main.py"
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """发送欢迎信息和菜单"""
+    # [文本优化] 更新了模式描述以匹配新功能
     welcome_message = (
-        "👋 您好！欢迎使用IP处理机器人。\n\n"
+        "👋 您好！欢迎使用IP智能处理机器人。\n\n"
         "请选择一个操作模式：\n"
-        "1. **模式一**: 扫描并从txt/csv文件提取IP\n"
-        "2. **模式二**: 运行自定义的cmip.sh脚本\n\n"
+        "1. **模式一**: 自动扫描并处理目录下所有txt/csv源文件。\n"
+        "2. **模式二**: 从配置的URL智能下载并解析IP数据。\n\n"
         "👉 直接发送数字 `1` 或 `2` 即可开始任务。"
     )
     await update.message.reply_text(welcome_message, parse_mode='Markdown')
@@ -35,7 +35,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await update.message.reply_text(f"✅ 已收到指令！正在以 **模式 {user_input}** 启动IP处理任务...")
         
         try:
-            # 使用 Popen 启动主脚本，并通过 stdin 传递模式选择
             process = subprocess.Popen(
                 [sys.executable, str(MAIN_PY_SCRIPT)],
                 stdin=subprocess.PIPE,
@@ -44,10 +43,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                 text=True,
                 encoding='utf-8'
             )
-            # 将模式写入子进程的 stdin
             process.communicate(input=user_input + '\n', timeout=3600) # 设置1小时超时
             
-            # 注意：主脚本会自己发送成功或失败的通知，这里机器人仅负责启动
             print(f"机器人成功启动了模式 {user_input} 的任务。")
             
         except FileNotFoundError:

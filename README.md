@@ -1,117 +1,64 @@
-# IP优选小工具 & Telegram机器人
+IP-Pro-Tool: 智能IP优选与自动化处理工具IP-Pro-Tool 是一个功能强大的自动化IP处理工作流，专为高效筛选和管理IP地址而设计。它能智能地从本地或网络获取IP，通过并行测速筛选出高质量节点，并将结果自动同步到您选择的后端（自定义API或GitHub Gist），同时通过Telegram机器人实现完整的远程监控与操作。✨ 核心功能🚀 双模IP源获取:模式一 (本地文件): 智能扫描并解析本地 .txt / .csv 文件，自动识别IP与端口列。模式二 (远程下载): 从 .env 文件配置的URL下载ZIP压缩包，自动解压并智能提取IP。它会优先尝试从目录名解析端口，若失败则回退至文件内容正则匹配。⚡️ 高效并行测速: 利用多线程同时对新获取的IP和历史有效的IP进行测速，极大缩短了处理耗时，提高了筛选效率。💾 灵活数据后端:支持将优选后的IP列表上传至您私有的自定义API。支持将结果自动更新到指定的 GitHub Gist。当两种后端都配置时，程序会人性化地让您在运行时选择其一。🤖 全程机器人遥控:集成Telegram机器人，可通过发送简单指令 (1 或 2) 远程启动IP处理任务。任务的开始、结束以及最终结果，机器人都会自动推送通知和文件到您的Telegram，实现“无人值守”。⚙️ 清晰的模块化设计:项目代码结构清晰，将主逻辑、机器人控制、IP提取等功能解耦到不同脚本中，易于理解和二次开发。🛠️ 完善的配置与容错:所有配置项均通过 .env 文件管理，安全便捷。脚本包含完整的进度条、日志输出和错误处理机制，运行稳定可靠。📊 工作流程graph TD
+    A[开始] --> B{选择运行方式};
+    B --> C[1. 命令行运行 main.py];
+    B --> D[2. 启动 bot.py 机器人];
+    
+    subgraph 机器人控制
+        D --> E{接收TG指令 '1' 或 '2'};
+        E --> F[调用 main.py];
+    end
 
-嘿！这是一个超好用的IP地址处理小助手。它能帮你自动抓IP、测速、然后把最好的结果存到你指定的地方（比如你自己的API或者GitHub Gist）。更酷的是，你还能用Telegram机器人随时随地控制它，任务跑得怎么样都会告诉你！
+    subgraph 主流程 main.py
+        C --> G{选择数据后端: API/Gist};
+        F --> G;
+        G --> H{选择IP源模式: 1/2};
+        H -- 模式1 --> I[运行 ipccc.py 处理本地文件];
+        H -- 模式2 --> J[运行 cmip_downloader.py 下载并处理];
+        I --> K[生成 ip.txt];
+        J --> K;
+        
+        K --> L{并行测速};
+        subgraph 并行测速
+            L --> M[测速新IP (ip.txt)];
+            L --> N[下载并测速历史IP];
+        end
 
-## ✨ 有啥好用的功能?
+        M --> O[生成 new_ip_test_result.csv];
+        N --> P[生成 old_ip_test_result.csv];
 
-* **智能二选一**: 你可以把结果存到自己的API或者GitHub Gist。要是两个都配了，它会很聪明地问你这次用哪个！
-* **IP来源超多**: 不管你的IP是存在`.txt`、`.csv`文件里，还是需要跑个脚本从网上扒，它都搞得定。
-* **测速快得飞起**: 它会同时给新IP和老IP测速，不用一个一个等，省下大把时间！
-* **配置超简单**: 所有的设置（API地址、密钥啥的）都放在一个`.env`文件里，改起来方便又安全。
-* **懒人必备TG机器人**: 直接在Telegram里发个命令就能让它干活，跑完还会给你发报告，超省心！
+        O --> Q{合并与去重};
+        P --> Q;
+        
+        Q --> R[生成 final_ip_list.txt];
+        R --> S{上传结果};
+        S -- Gist --> T[更新到GitHub Gist];
+        S -- API --> U[推送到自定义API];
+        
+        T --> V[发送TG通知和文件];
+        U --> V;
+    end
+    
+    V --> W[结束];
+📁 项目结构.
+├── .env.example          # 配置文件模板
+├── bot.py                # Telegram 机器人入口脚本
+├── cmip_downloader.py    # 模式二：远程IP下载与解析逻辑
+├── ipccc.py              # 模式一：本地IP文件提取逻辑
+├── iptest.exe            # IP测速核心程序 (需自行准备)
+├── main.py               # 主流程控制脚本
+├── README.md             # 本说明文档
+└── requirements.txt      # Python 依赖库
+🚀 快速开始1. 环境准备Python: 确保已安装 Python 3.8 或更高版本。Git: 确保已安装 Git。iptest.exe: 请自行获取 iptest.exe 文件，并将其放置在项目根目录。2. 安装步骤克隆项目代码:git clone <你的仓库URL>
+cd <你的仓库目录>
+创建并激活Python虚拟环境 (强烈推荐):# 创建
+python -m venv .venv
 
-## 🚀 怎么开始用？
+# 激活 (Windows)
+.venv\Scripts\activate
 
-跟着下面几步走，很快就能跑起来啦！
-
-### 1. 你需要准备啥？
-
-* **Python**: 电脑上得有Python（最好是3.8以上的版本）。
-* **Git**: 这个也得装上。
-* **`iptest.exe`**: 把这个测速工具放到项目文件夹里。
-
-### 2. 三步安装
-
-1.  **把代码弄下来**
-    ```bash
-    git clone <你的仓库URL>
-    cd <你的仓库目录>
-    ```
-
-2.  **搞个虚拟环境** (这是个好习惯，能让项目干干净净)
-    ```bash
-    # 创建
-    python -m venv .venv
-    # 激活 (Windows看这里)
-    .venv\Scripts\activate
-    ```
-
-3.  **装上所有需要的库**
-    ```bash
-    pip install -r requirements.txt
-    ```
-
-### 3. 配置一下
-
-1.  **创建你的配置文件**: 找到 `.env.example` 这个文件，复制一份，然后把名字改成 `.env`。
-2.  **填上你的信息**: 打开刚创建的 `.env` 文件，把里面的东西换成你自己的。
-    * 想用**API**？那就填 `CUSTOM_API_URL`。
-    * 想用**Gist**？那就填 `GIST_ID` 和 `GITHUB_TOKEN`。
-    * 要是两个都填了，别担心，脚本跑起来的时候会问你的！
-
-#### Gist怎么配？
-
-* **搞个GitHub Token**:
-    1.  去GitHub的[开发者设置](https://github.com/settings/tokens)。
-    2.  点 `Generate new token` -> `Generate new token (classic)`。
-    3.  随便写个名字，比如 "IP小工具"。
-    4.  权限只用勾选 `gist` 就行了。
-    5.  点 `Generate token`，然后**马上把那串码复制下来**，因为它只会出现这一次！
-* **创建个Gist**:
-    1.  去 [GitHub Gist](https://gist.github.com/)。
-    2.  新建一个Gist，文件名和内容随便写点啥都行。
-    3.  创建好之后，看浏览器地址栏，URL里那段长长的字符串就是Gist的ID，复制它！
-
-## 🛠️ 怎么跑起来？
-
-### 方法一：直接跑脚本
-
-想在自己电脑上测试或者直接用，就打开命令行：
-```bash
-python main.py
-```
-然后跟着提示操作就行啦！
-
-### 方法二：用Telegram机器人
-
-想躺着也能用？那就启动机器人：
-```bash
-python bot.py
-```
-然后去Telegram里找你的机器人，给它发个 `/start`，它就会告诉你怎么玩了。
-
-## 🔗 和 edgetunnel 项目联动
-
-这个脚本跑完后，会给你一个存着最好IP的URL。这个URL可以直接用在 **cmliu** 大佬的 `edgetunnel` 项目里，简直是天作之合！
-
-**URL在哪？**:
-* **用API的话**: 就是你在 `.env` 里填的那个 `CUSTOM_API_URL`。
-* **用Gist的话**: 去你的Gist页面，点一下 `Raw` 按钮，这时候浏览器地址栏里的链接就是了。
-
-**怎么用？**:
-1.  把这个URL直接填到 `edgetunnel` 的配置里。
-2.  或者用 `ADDAPI` 变量的方式导入。
-
-想了解更多细节？快去看看 `edgetunnel` 的官方文档吧：<https://github.com/cmliu/edgetunnel>
-
-## 📖 `iptest.exe` 参数小抄
-
-咱们的测速功能是靠 `iptest.exe` 这个神器。虽然脚本都帮你配好了，但如果你想自己研究下，可以看看这些参数是啥意思。
-
-* `-file`: 告诉它要去测哪个文件里的IP。
-* `-outfile`: 测完的结果存到哪里。
-* `-max`: 一次同时测多少个IP，数字越大越快，也越吃电脑性能。
-* `-speedtest`: 测速模式，`3`就是测下载和上传。
-* `-speedlimit`: 速度太慢的IP就不要了，单位是MB/s。
-* `-delay`: 延迟太高的IP也扔掉，单位是毫秒。
-* `-url`: 用哪个网址来测试下载速度。
-
-## 🙏 特别感谢
-
-这个项目能做出来，离不开下面这些大佬和项目的帮助，真心感谢他们！
-
-* **yutian**: 感谢他开发的超牛的 `IP-SpeedTest` 工具！
-    * **GitHub**: <https://github.com/yutian81>
-* **cmliu**: 感谢他的各种骚操作和 `edgetunnel` 项目！
-    * **GitHub**: <https://github.com/cmliu>
-    * **Telegram 频道**: <https://t.me/zip_cm_edu_kg>
+# 激活 (macOS/Linux)
+# source .venv/bin/activate
+安装依赖库:$ pip install -r requirements.txt
+3. 项目配置将 .env.example 复制一份并重命名为 .env，然后根据下表说明填写您自己的信息。变量名是否必须说明CUSTOM_API_URL二选一您的自定义API地址。用于接收POST请求，请求体为最终的IP列表文本。GIST_ID二选一您的GitHub Gist ID。GITHUB_TOKEN二选一拥有 gist 权限的GitHub个人访问令牌。GIST_FILENAME否在Gist中保存IP列表的文件名，默认为 ip_list.txt。CMIP_ZIP_URL是模式二使用的远程IP压缩包下载地址。SPEED_TEST_URL是iptest.exe 用于测速的下载文件URL (例如 .../50mb.bin)。IPTEST_MAX否iptest.exe 并发测速的最大线程数，默认为 200。IPTEST_SPEEDTEST否iptest.exe 测速模式，默认为 3 (下载+上传)。IPTEST_SPEEDLIMIT否iptest.exe 速度下限 (MB/s)，低于此速度的IP将被丢弃，默认为 6。IPTEST_DELAY否iptest.exe 延迟上限 (ms)，高于此延迟的IP将被丢弃，默认为 260。TG_BOT_TOKEN是您的Telegram机器人Token。TG_CHAT_ID是用于接收通知和文件的Telegram聊天ID (可以是您自己或频道ID)。如何配置GitHub Gist？1. 获取GitHub Token:前往 GitHub 的 个人访问令牌设置页面。点击 Generate new token -> Generate new token (classic)。在 Note (备注) 中填写一个描述性名称，如 “IP-Pro-Tool-Token”。在 Select scopes 中，仅需勾选 gist 权限。点击 Generate token，立即复制生成的令牌并妥善保管，此令牌仅显示一次。2. 创建Gist并获取ID:访问 GitHub Gist。创建一个新的Gist，文件名和内容可随意填写。创建成功后，查看浏览器地址栏。URL的最后一部分即为Gist ID (例如 https://gist.github.com/username/THIS_IS_THE_GIST_ID)，复制此ID。🛠️ 使用指南方法一：通过命令行运行此方法适用于在本地直接执行或进行调试。python main.py
+程序将自动检测您的配置，并根据提示引导您选择数据后端和运行模式。方法二：通过Telegram机器人此方法可实现远程“无人值守”操作。启动机器人后台服务:python bot.py
+终端会显示 "机器人已上线，正在监听消息..."。与机器人交互:在Telegram中找到您的机器人，发送 /start 命令，机器人会返回欢迎语和模式选项。直接发送数字 1 或 2 给机器人，即可启动对应模式的IP处理任务。任务完成后，机器人会将结果报告和 final_ip_list.txt 文件发送给您。🔗 与 edgetunnel 项目联动本工具生成的IP列表URL可无缝对接到 cmliu 的 edgetunnel 项目中作为优选IP源。若使用API: 源URL即为您在 .env 中配置的 CUSTOM_API_URL。若使用Gist: 前往您的Gist页面，点击 Raw 按钮，浏览器地址栏中显示的链接即为源URL。将此URL用于 edgetunnel 项目的 ADDAPI 变量或相关配置中即可。更多详情请参考 edgetunnel 官方文档：https://github.com/cmliu/edgetunnel🙏 致谢yutian: 感谢其开发的 IP-SpeedTest (iptest.exe) 工具。GitHub: https://github.com/yutian81cmliu: 感谢其 edgetunnel 项目以及在IP处理方面分享的经验。GitHub: https://github.com/cmliuTelegram: https://t.me/zip_cm_edu_kg

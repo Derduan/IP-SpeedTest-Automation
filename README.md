@@ -105,23 +105,19 @@ graph TD
 
 #### 2. 安装步骤
 
-1.  **克隆项目代码**:
-    ```bash
-    git clone <你的仓库URL>
-    cd <你的仓库目录>
-    ```
+git clone <你的仓库URL>
+cd <你的仓库目录>
 
-2.  **创建并激活Python虚拟环境** (强烈推荐):
-    ```bash
-    # 创建虚拟环境
-    python -m venv .venv
+创建并激活Python虚拟环境 (强烈推荐):
 
-    # 激活虚拟环境 (Windows)
-    .venv\Scripts\activate
+# 创建
+python -m venv .venv
 
-    # 激活虚拟环境 (macOS/Linux)
-    # source .venv/bin/activate
-    ```
+# 激活 (Windows)
+.venv\Scripts\activate
+
+# 激活 (macOS/Linux)
+# source .venv/bin/activate
 
 3.  **安装依赖库**:
     ```bash
@@ -184,11 +180,15 @@ python main.py
 * **若使用API**: 源URL即为您在 `.env` 中配置的 `CUSTOM_API_URL`。
 * **若使用Gist**: 前往您的Gist页面，点击 **Raw** 按钮，浏览器地址栏中显示的链接即为源URL。
 
-将此URL用于 `edgetunnel` 项目的 `ADDAPI` 变量或相关配置中即可。
+将此URL用于 edgetunnel 项目的 ADDAPI 变量或相关配置中即可。更多详情请参考 edgetunnel 官方文档：https://github.com/cmliu/edgetunnel
 
----
+🙏 致谢
+yutian: 感谢其开发的 IP-SpeedTest (iptest.exe) 工具。
 
-### 🙏 致谢
+GitHub: https://github.com/yutian81
 
-* **yutian**: 感谢其开发的 [IP-SpeedTest](https://github.com/yutian81) (`iptest.exe`) 工具。
-* **cmliu**: 感谢其 [edgetunnel](https://github.com/cmliu) 项目以及在IP处理方面分享的宝贵经验。
+cmliu: 感谢其 edgetunnel 项目以及在IP处理方面分享的经验。
+
+GitHub: https://github.com/cmliu
+
+Telegram: https://t.me/zip_cm_edu_kg

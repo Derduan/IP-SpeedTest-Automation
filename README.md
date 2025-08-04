@@ -106,14 +106,14 @@ cd <你的仓库目录>
 
 创建并激活Python虚拟环境 (强烈推荐):
 
-# 创建
+### 创建
 python -m venv .venv
 
-# 激活 (Windows)
+### 激活 (Windows)
 .venv\Scripts\activate
 
-# 激活 (macOS/Linux)
-# source .venv/bin/activate
+### 激活 (macOS/Linux)
+### source .venv/bin/activate
 
 安装依赖库:
 

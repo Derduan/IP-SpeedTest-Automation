@@ -1,63 +1,62 @@
-# IP-Pro-Tool: 智能IP优选与自动化处理工具
-IP-Pro-Tool 是一个功能强大的自动化IP处理工作流，专为高效筛选和管理IP地址而设计。它能智能地从本地或网络获取IP，通过并行测速筛选出高质量节点，并将结果自动同步到您选择的后端（自定义API或GitHub Gist），同时通过Telegram机器人实现完整的远程监控与操作。
+# IP-Pro-Tool：智能IP优选与自动化处理工具
 
-✨ 核心功能
-🚀 双模IP源获取:
+**IP-Pro-Tool** 是一个为高效筛选和管理IP地址而设计的功能强大的自动化工作流。它能够智能地从本地或网络源获取IP地址，通过高并发测速筛选出最优质的节点，并将结果无缝同步到您选择的后端服务（如自定义API或GitHub Gist）。同时，集成的Telegram机器人让您能够完全远程监控和操作，实现真正的“无人值守”自动化。
 
-模式一 (本地文件): 智能扫描并解析本地 .txt / .csv 文件，自动识别IP与端口列。
+---
 
-模式二 (远程下载): 从 .env 文件配置的URL下载ZIP压缩包，自动解压并智能提取IP。它会优先尝试从目录名解析端口，若失败则回退至文件内容正则匹配。
+### ✨ 核心功能
 
-⚡️ 高效并行测速: 利用多线程同时对新获取的IP和历史有效的IP进行测速，极大缩短了处理耗时，提高了筛选效率。
+* **🚀 双模IP源获取**
+    * **本地文件模式**: 智能扫描并解析本地的 `.txt` 或 `.csv` 文件，自动识别并提取IP与端口。
+    * **远程下载模式**: 从指定URL下载ZIP压缩包，自动解压并智能提取IP。程序会优先从目录名解析端口，若失败则回退至文件内容进行正则匹配。
 
-💾 灵活数据后端:
+* **⚡️ 高效并行测速**
+    * 利用多线程技术，同时对新获取的IP和历史有效IP进行速度测试，极大地缩短了处理时间，显著提升筛选效率。
 
-支持将优选后的IP列表上传至您私有的自定义API。
+* **💾 灵活的数据后端**
+    * **自定义API**: 支持将优选后的IP列表通过POST请求上传至您自己的API端点。
+    * **GitHub Gist**: 支持将结果自动更新到指定的GitHub Gist，方便版本管理和分享。
+    * 当两种后端都配置时，程序会在运行时人性化地提示您进行选择。
 
-支持将结果自动更新到指定的 GitHub Gist。
+* **🤖 全程机器人遥控**
+    * 通过集成的Telegram机器人，您只需发送简单的指令（`1` 或 `2`）即可远程启动IP处理任务。
+    * 任务的启动、完成以及最终结果，机器人都会自动推送通知和文件到您的Telegram，实现完全的自动化监控。
 
-当两种后端都配置时，程序会人性化地让您在运行时选择其一。
+* **⚙️ 清晰的模块化设计**
+    * 项目代码结构清晰，将主逻辑、机器人控制、IP提取等核心功能解耦到独立的脚本中，便于理解、维护和二次开发。
 
-🤖 全程机器人遥控:
+* **🛠️ 完善的配置与容错**
+    * 所有配置项均通过 `.env` 文件进行管理，既安全又便捷。
+    * 脚本内置了完整的进度条、日志输出和错误处理机制，确保运行过程稳定可靠。
 
-集成Telegram机器人，可通过发送简单指令 (1 或 2) 远程启动IP处理任务。
+---
 
-任务的开始、结束以及最终结果，机器人都会自动推送通知和文件到您的Telegram，实现“无人值守”。
+### 📊 工作流程
 
-⚙️ 清晰的模块化设计:
-
-项目代码结构清晰，将主逻辑、机器人控制、IP提取等功能解耦到不同脚本中，易于理解和二次开发。
-
-🛠️ 完善的配置与容错:
-
-所有配置项均通过 .env 文件管理，安全便捷。
-
-脚本包含完整的进度条、日志输出和错误处理机制，运行稳定可靠。
-
-📊 工作流程
+```mermaid
 graph TD
     A[开始] --> B{选择运行方式};
-    B --> C[1. 命令行运行 main.py];
-    B --> D[2. 启动 bot.py 机器人];
-    
+    B --> C[1. 命令行直接运行];
+    B --> D[2. 启动Telegram机器人];
+
     subgraph 机器人控制
         D --> E{接收TG指令 '1' 或 '2'};
-        E --> F[调用 main.py];
+        E --> F[调用主流程];
     end
 
     subgraph 主流程 main.py
         C --> G{选择数据后端: API/Gist};
         F --> G;
-        G --> H{选择IP源模式: 1/2};
-        H -- 模式1 --> I[运行 ipccc.py 处理本地文件];
-        H -- 模式2 --> J[运行 cmip_downloader.py 下载并处理];
+        G --> H{选择IP源模式: 1-本地 / 2-远程};
+        H -- 模式1 --> I[ipccc.py: 处理本地文件];
+        H -- 模式2 --> J[cmip_downloader.py: 下载并处理远程文件];
         I --> K[生成 ip.txt];
         J --> K;
-        
+
         K --> L{并行测速};
         subgraph 并行测速
             L --> M[测速新IP (ip.txt)];
-            L --> N[下载并测速历史IP];
+            L --> N[下载并测速历史有效IP];
         end
 
         M --> O[生成 new_ip_test_result.csv];
@@ -65,21 +64,24 @@ graph TD
 
         O --> Q{合并与去重};
         P --> Q;
-        
+
         Q --> R[生成 final_ip_list.txt];
         R --> S{上传结果};
         S -- Gist --> T[更新到GitHub Gist];
         S -- API --> U[推送到自定义API];
-        
+
         T --> V[发送TG通知和文件];
         U --> V;
     end
-    
+
     V --> W[结束];
+```
 
-(注意: 上方的流程图使用了 Mermaid 语法，在GitHub等平台上会自动渲染成图表。)
+---
 
-📁 项目结构
+### 📁 项目结构
+
+```
 .
 ├── .env.example          # 配置文件模板
 ├── bot.py                # Telegram 机器人入口脚本
@@ -89,173 +91,104 @@ graph TD
 ├── main.py               # 主流程控制脚本
 ├── README.md             # 本说明文档
 └── requirements.txt      # Python 依赖库
+```
 
-🚀 快速开始
-1. 环境准备
-Python: 确保已安装 Python 3.8 或更高版本。
+---
 
-Git: 确保已安装 Git。
+### 🚀 快速开始
 
-iptest.exe: 请自行获取 iptest.exe 文件，并将其放置在项目根目录。
+#### 1. 环境准备
 
-2. 安装步骤
-克隆项目代码:
+* **Python**: 确保已安装 Python 3.8 或更高版本。
+* **Git**: 确保已安装 Git。
+* **iptest.exe**: 请自行获取 `iptest.exe` 文件，并将其放置在项目根目录。
 
-git clone <你的仓库URL>
-cd <你的仓库目录>
+#### 2. 安装步骤
 
-创建并激活Python虚拟环境 (强烈推荐):
+1.  **克隆项目代码**:
+    ```bash
+    git clone <你的仓库URL>
+    cd <你的仓库目录>
+    ```
 
-# 创建
-python -m venv .venv
+2.  **创建并激活Python虚拟环境** (强烈推荐):
+    ```bash
+    # 创建虚拟环境
+    python -m venv .venv
 
-# 激活 (Windows)
-.venv\Scripts\activate
+    # 激活虚拟环境 (Windows)
+    .venv\Scripts\activate
 
-# 激活 (macOS/Linux)
-# source .venv/bin/activate
+    # 激活虚拟环境 (macOS/Linux)
+    # source .venv/bin/activate
+    ```
 
-安装依赖库:
+3.  **安装依赖库**:
+    ```bash
+    pip install -r requirements.txt
+    ```
 
-pip install -r requirements.txt
+#### 3. 项目配置
 
-3. 项目配置
-将 .env.example 复制一份并重命名为 .env，然后根据以下说明填写您自己的信息。
+将 `.env.example` 文件复制一份并重命名为 `.env`，然后根据以下说明填写您的配置信息。
 
-CUSTOM_API_URL
+| 变量                | 是否必须 | 说明                                                                 |
+| :------------------ | :------: | :------------------------------------------------------------------- |
+| `CUSTOM_API_URL`    |  二选一  | 您的自定义API地址，用于接收最终的IP列表文本。                          |
+| `GIST_ID`           |  二选一  | 您的GitHub Gist ID。                                                 |
+| `GITHUB_TOKEN`      |  二选一  | 拥有 `gist` 权限的GitHub个人访问令牌。                               |
+| `GIST_FILENAME`     |    否    | 在Gist中保存IP列表的文件名，默认为 `ip_list.txt`。                   |
+| `CMIP_ZIP_URL`      |  **是** | 模式二使用的远程IP压缩包下载地址。                                   |
+| `SPEED_TEST_URL`    |  **是** | `iptest.exe` 用于测速的下载文件URL (例如 `.../50mb.bin`)。           |
+| `IPTEST_MAX`        |    否    | `iptest.exe` 并发测速的最大线程数，默认为 `200`。                      |
+| `IPTEST_SPEEDTEST`  |    否    | `iptest.exe` 测速模式，默认为 `3` (下载+上传)。                      |
+| `IPTEST_SPEEDLIMIT` |    否    | `iptest.exe` 速度下限 (MB/s)，低于此速度的IP将被丢弃，默认为 `6`。    |
+| `IPTEST_DELAY`      |    否    | `iptest.exe` 延迟上限 (ms)，高于此延迟的IP将被丢弃，默认为 `260`。    |
+| `TG_BOT_TOKEN`      |  **是** | 您的Telegram机器人Token。                                            |
+| `TG_CHAT_ID`        |  **是** | 用于接收通知和文件的Telegram聊天ID。                                 |
 
-是否必须: 二选一
+---
 
-说明: 您的自定义API地址。用于接收POST请求，请求体为最终的IP列表文本。
+### 🛠️ 使用指南
 
-GIST_ID
+#### 方法一：通过命令行运行
 
-是否必须: 二选一
-
-说明: 您的GitHub Gist ID。
-
-GITHUB_TOKEN
-
-是否必须: 二选一
-
-说明: 拥有 gist 权限的GitHub个人访问令牌。
-
-GIST_FILENAME
-
-是否必须: 否
-
-说明: 在Gist中保存IP列表的文件名，默认为 ip_list.txt。
-
-CMIP_ZIP_URL
-
-是否必须: 是
-
-说明: 模式二使用的远程IP压缩包下载地址。
-
-SPEED_TEST_URL
-
-是否必须: 是
-
-说明: iptest.exe 用于测速的下载文件URL (例如 .../50mb.bin)。
-
-IPTEST_MAX
-
-是否必须: 否
-
-说明: iptest.exe 并发测速的最大线程数，默认为 200。
-
-IPTEST_SPEEDTEST
-
-是否必须: 否
-
-说明: iptest.exe 测速模式，默认为 3 (下载+上传)。
-
-IPTEST_SPEEDLIMIT
-
-是否必须: 否
-
-说明: iptest.exe 速度下限 (MB/s)，低于此速度的IP将被丢弃，默认为 6。
-
-IPTEST_DELAY
-
-是否必须: 否
-
-说明: iptest.exe 延迟上限 (ms)，高于此延迟的IP将被丢弃，默认为 260。
-
-TG_BOT_TOKEN
-
-是否必须: 是
-
-说明: 您的Telegram机器人Token。
-
-TG_CHAT_ID
-
-是否必须: 是
-
-说明: 用于接收通知和文件的Telegram聊天ID (可以是您自己或频道ID)。
-
-如何配置GitHub Gist？
-1. 获取GitHub Token:
-
-前往 GitHub 的 个人访问令牌设置页面。
-
-点击 Generate new token -> Generate new token (classic)。
-
-在 Note (备注) 中填写一个描述性名称，如 “IP-Pro-Tool-Token”。
-
-在 Select scopes 中，仅需勾选 gist 权限。
-
-点击 Generate token，立即复制生成的令牌并妥善保管，此令牌仅显示一次。
-
-2. 创建Gist并获取ID:
-
-访问 GitHub Gist。
-
-创建一个新的Gist，文件名和内容可随意填写。
-
-创建成功后，查看浏览器地址栏。URL的最后一部分即为Gist ID (例如 https://gist.github.com/username/THIS_IS_THE_GIST_ID)，复制此ID。
-
-🛠️ 使用指南
-方法一：通过命令行运行
 此方法适用于在本地直接执行或进行调试。
 
+```bash
 python main.py
-
+```
 程序将自动检测您的配置，并根据提示引导您选择数据后端和运行模式。
 
-方法二：通过Telegram机器人
+#### 方法二：通过Telegram机器人
+
 此方法可实现远程“无人值守”操作。
 
-启动机器人后台服务:
+1.  **启动机器人后台服务**:
+    ```bash
+    python bot.py
+    ```
+    终端将显示 `机器人已上线，正在监听消息...`。
 
-python bot.py
+2.  **与机器人交互**:
+    * 在Telegram中找到您的机器人，发送 `/start` 命令，机器人会返回欢迎语和模式选项。
+    * 直接向机器人发送数字 `1` 或 `2`，即可启动对应模式的IP处理任务。
+    * 任务完成后，机器人会将结果报告和 `final_ip_list.txt` 文件发送给您。
 
-终端会显示 "机器人已上线，正在监听消息..."。
+---
 
-与机器人交互:
+### 🔗 与 edgetunnel 项目联动
 
-在Telegram中找到您的机器人，发送 /start 命令，机器人会返回欢迎语和模式选项。
+本工具生成的IP列表URL可无缝对接到 [cmliu/edgetunnel](https://github.com/cmliu/edgetunnel) 项目中作为优选IP源。
 
-直接发送数字 1 或 2 给机器人，即可启动对应模式的IP处理任务。
+* **若使用API**: 源URL即为您在 `.env` 中配置的 `CUSTOM_API_URL`。
+* **若使用Gist**: 前往您的Gist页面，点击 **Raw** 按钮，浏览器地址栏中显示的链接即为源URL。
 
-任务完成后，机器人会将结果报告和 final_ip_list.txt 文件发送给您。
+将此URL用于 `edgetunnel` 项目的 `ADDAPI` 变量或相关配置中即可。
 
-🔗 与 edgetunnel 项目联动
-本工具生成的IP列表URL可无缝对接到 cmliu 的 edgetunnel 项目中作为优选IP源。
+---
 
-若使用API: 源URL即为您在 .env 中配置的 CUSTOM_API_URL。
+### 🙏 致谢
 
-若使用Gist: 前往您的Gist页面，点击 Raw 按钮，浏览器地址栏中显示的链接即为源URL。
-
-将此URL用于 edgetunnel 项目的 ADDAPI 变量或相关配置中即可。更多详情请参考 edgetunnel 官方文档：https://github.com/cmliu/edgetunnel
-
-🙏 致谢
-yutian: 感谢其开发的 IP-SpeedTest (iptest.exe) 工具。
-
-GitHub: https://github.com/yutian81
-
-cmliu: 感谢其 edgetunnel 项目以及在IP处理方面分享的经验。
-
-GitHub: https://github.com/cmliu
-
-Telegram: https://t.me/zip_cm_edu_kg
+* **yutian**: 感谢其开发的 [IP-SpeedTest](https://github.com/yutian81) (`iptest.exe`) 工具。
+* **cmliu**: 感谢其 [edgetunnel](https://github.com/cmliu) 项目以及在IP处理方面分享的宝贵经验。

@@ -1,3 +1,5 @@
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 # IP-Pro-Tool：智能IP优选与自动化处理工具
 
 **IP-Pro-Tool** 是一个为高效筛选和管理IP地址而设计的功能强大的自动化工作流。它能够智能地从本地或网络源获取IP地址，通过高并发测速筛选出最优质的节点，并将结果无缝同步到您选择的后端服务（如自定义API或GitHub Gist）。同时，集成的Telegram机器人让您能够完全远程监控和操作，实现真正的“无人值守”自动化。

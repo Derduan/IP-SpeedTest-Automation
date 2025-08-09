@@ -192,3 +192,5 @@ python main.py
 
 * **yutian**: 感谢其开发的 [IP-SpeedTest](https://github.com/yutian81) (`iptest.exe`) 工具。
 * **cmliu**: 感谢其 [edgetunnel](https://github.com/cmliu) 项目以及在IP处理方面分享的宝贵经验。
+## License
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

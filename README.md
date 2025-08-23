@@ -1,3 +1,5 @@
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 # IP-Pro-Tool：智能IP优选与自动化处理工具
 
 **IP-Pro-Tool** 是一个为高效筛选和管理IP地址而设计的功能强大的自动化工作流。它能够智能地从本地或网络源获取IP地址，通过高并发测速筛选出最优质的节点，并将结果无缝同步到您选择的后端服务（如自定义API或GitHub Gist）。同时，集成的Telegram机器人让您能够完全远程监控和操作，实现真正的“无人值守”自动化。
@@ -184,11 +186,15 @@ python main.py
 * **若使用API**: 源URL即为您在 `.env` 中配置的 `CUSTOM_API_URL`。
 * **若使用Gist**: 前往您的Gist页面，点击 **Raw** 按钮，浏览器地址栏中显示的链接即为源URL。
 
-将此URL用于 `edgetunnel` 项目的 `ADDAPI` 变量或相关配置中即可。
+将此URL用于 edgetunnel 项目的 ADDAPI 变量或相关配置中即可。更多详情请参考 edgetunnel 官方文档：https://github.com/cmliu/edgetunnel
 
----
+🙏 致谢
+yutian: 感谢其开发的 IP-SpeedTest (iptest.exe) 工具。
 
-### 🙏 致谢
+GitHub: https://github.com/yutian81
 
-* **yutian**: 感谢其开发的 [IP-SpeedTest](https://github.com/yutian81) (`iptest.exe`) 工具。
-* **cmliu**: 感谢其 [edgetunnel](https://github.com/cmliu) 项目以及在IP处理方面分享的宝贵经验。
+cmliu: 感谢其 edgetunnel 项目以及在IP处理方面分享的经验。
+
+GitHub: https://github.com/cmliu
+
+Telegram: https://t.me/zip_cm_edu_kg

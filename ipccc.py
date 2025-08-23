@@ -24,7 +24,7 @@ CURRENT_DIR = Path.cwd()
 OUTPUT_FILENAME = "ip.txt"
 IGNORED_FILENAMES = {
     "new_ip_test_result.csv", "old_ip_test_result.csv", "ip.txt",
-    "api_temp.txt", "final_ip_list.txt",
+    "api_temp.txt", "final_ip_list.txt", "requirements.txt"
 }
 
 def find_source_files() -> List[Path]:
@@ -71,44 +71,103 @@ def select_files_from_list(file_list: List[Path]) -> List[Path]:
 def process_files(files_to_process: List[Path], output_file: Path) -> None:
     """[核心升级] 从指定的文件列表中提取IP和端口，智能处理多种格式。"""
     unique_ips: Set[str] = set()
-    general_pattern = re.compile(r"(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})[:\s,]+(\d{1,5})")
+
+    # 更宽容的匹配：优先匹配 ip:port，然后 ip sep port；如果没有端口则尝试行内推断最近的数字作为端口
+    ip_colon_port = re.compile(r"(?P<ip>(?:\d{1,3}\.){3}\d{1,3})\s*[:#]\s*(?P<port>\d{1,5})")
+    ip_space_comma_port = re.compile(r"(?P<ip>(?:\d{1,3}\.){3}\d{1,3})[\s,;]+(?P<port>\d{1,5})")
+    ip_only = re.compile(r"(?P<ip>(?:\d{1,3}\.){3}\d{1,3})")
+
     IP_ALIASES = {"ip地址", "ip address", "ip"}
     PORT_ALIASES = {"端口", "port"}
+
+    def is_valid_ip(ip: str) -> bool:
+        parts = ip.split('.')
+        if len(parts) != 4:
+            return False
+        try:
+            return all(0 <= int(p) <= 255 for p in parts)
+        except ValueError:
+            return False
+
+    def is_valid_port(p: str) -> bool:
+        try:
+            v = int(p)
+            return 1 <= v <= 65535
+        except Exception:
+            return False
+
+    def parse_line_add_unique(line: str, store: Set[str]):
+        # 尝试多种模式
+        m = ip_colon_port.search(line) or ip_space_comma_port.search(line)
+        ip = port = None
+        if m:
+            ip = m.group('ip')
+            port = m.group('port')
+        else:
+            m_ip = ip_only.search(line)
+            if m_ip:
+                ip = m_ip.group('ip')
+                # 尝试找到 ip 后最近的数字作为端口
+                rest = line[m_ip.end():]
+                m_num = re.search(r"\d{1,5}", rest)
+                if m_num:
+                    port = m_num.group(0)
+        if ip and port and is_valid_ip(ip) and is_valid_port(port):
+            store.add(f"{ip} {port}")
 
     print(f"\n[*] 开始从 {len(files_to_process)} 个文件中智能提取IP...")
     for file_path in tqdm(files_to_process, desc="提取进度", unit="个文件"):
         try:
             if file_path.suffix.lower() == '.csv':
                 with file_path.open('r', encoding='utf-8', errors='ignore') as f:
-                    header_line = f.readline()
-                    if not any(alias in header_line.lower() for alias in IP_ALIASES):
-                        tqdm.write(f"[i] CSV '{file_path.name}' 表头不规范，按纯文本扫描。")
-                        f.seek(0)
-                        content = f.read()
-                        for match in general_pattern.finditer(content):
-                            unique_ips.add(f"{match.group(1)} {match.group(2)}")
-                        continue
+                    # 读取首行并尝试判断表头
+                    sample = f.read(4096)
                     f.seek(0)
-                    reader = csv.DictReader(f)
-                    ip_col = next((fld for fld in reader.fieldnames if fld.lower().strip() in IP_ALIASES), None)
-                    port_col = next((fld for fld in reader.fieldnames if fld.lower().strip() in PORT_ALIASES), None)
-                    if ip_col and port_col:
-                        for row in reader:
-                            ip = row.get(ip_col, "").strip()
-                            port = row.get(port_col, "").strip()
-                            if re.match(r"^\d{1,3}(\.\d{1,3}){3}$", ip) and port.isdigit():
-                                unique_ips.add(f"{ip} {port}")
-                    else:
-                        tqdm.write(f"[-] CSV '{file_path.name}' 未识别到列，回退到通用扫描。")
+                    header_line = sample.splitlines()[0] if sample else ''
+                    if not any(alias in header_line.lower() for alias in IP_ALIASES):
+                        tqdm.write(f"[i] CSV '{file_path.name}' 表头不规范或未包含 IP 列，按逐行扫描。")
+                        for line in f:
+                            parse_line_add_unique(line, unique_ips)
+                        continue
+
+                    # 尝试用 DictReader 读取（兼容有表头的 CSV）
+                    try:
                         f.seek(0)
-                        content = f.read()
-                        for match in general_pattern.finditer(content):
-                            unique_ips.add(f"{match.group(1)} {match.group(2)}")
+                        sample2 = f.read(8192)
+                        f.seek(0)
+                        has_header = False
+                        try:
+                            has_header = csv.Sniffer().has_header(sample2)
+                        except Exception:
+                            has_header = True
+                        if has_header:
+                            reader = csv.DictReader(f)
+                            ip_col = next((fld for fld in (reader.fieldnames or []) if fld and fld.lower().strip() in IP_ALIASES), None)
+                            port_col = next((fld for fld in (reader.fieldnames or []) if fld and fld.lower().strip() in PORT_ALIASES), None)
+                            if ip_col and port_col:
+                                for row in reader:
+                                    raw_ip = (row.get(ip_col) or '').strip()
+                                    raw_port = (row.get(port_col) or '').strip()
+                                    # 兼容 ip:port 写在同一字段
+                                    if raw_ip and ':' in raw_ip and not raw_port:
+                                        m = ip_colon_port.search(raw_ip)
+                                        if m:
+                                            raw_ip = m.group('ip')
+                                            raw_port = m.group('port')
+                                    if raw_ip and raw_port and is_valid_ip(raw_ip) and is_valid_port(raw_port):
+                                        unique_ips.add(f"{raw_ip} {raw_port}")
+                                    else:
+                                        # 若列识别失败，尝试逐行解析该 CSV 的行文本
+                                        parse_line_add_unique(','.join(row.values()), unique_ips)
+                                continue
+                    except Exception:
+                        f.seek(0)
+                        for line in f:
+                            parse_line_add_unique(line, unique_ips)
             else:
                 with file_path.open('r', encoding='utf-8', errors='ignore') as f:
-                    content = f.read()
-                    for match in general_pattern.finditer(content):
-                        unique_ips.add(f"{match.group(1)} {match.group(2)}")
+                    for line in f:
+                        parse_line_add_unique(line, unique_ips)
         except Exception as e:
             tqdm.write(f"[-] 处理文件 '{file_path.name}' 时出错: {e}")
 

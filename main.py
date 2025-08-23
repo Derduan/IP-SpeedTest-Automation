@@ -8,6 +8,9 @@ IP处理主脚本 (智能检测最终版):
 """
 import subprocess
 import sys
+import argparse
+import logging
+import signal
 import csv
 import re
 import time
@@ -18,6 +21,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import as_completed
+import tempfile
+import math
+import uuid
 
 # 导入dotenv用于加载配置文件
 from dotenv import load_dotenv
@@ -37,6 +44,14 @@ IPTEST_MAX = os.getenv("IPTEST_MAX", "200")
 IPTEST_SPEEDTEST = os.getenv("IPTEST_SPEEDTEST", "3")
 IPTEST_SPEEDLIMIT = os.getenv("IPTEST_SPEEDLIMIT", "6")
 IPTEST_DELAY = os.getenv("IPTEST_DELAY", "260")
+
+# 并发测速与稳定策略（可配置，灵感来源 CloudflareBestIP）
+TEST_CONCURRENCY = int(os.getenv("TEST_CONCURRENCY", "2"))           # 同时运行的 iptest 实例数
+TEST_BATCH_SIZE = int(os.getenv("TEST_BATCH_SIZE", "200"))           # 将输入 IP 列表分批，每批大小
+TEST_RETRY = int(os.getenv("TEST_RETRY", "2"))                       # 每个批次失败时的重试次数
+TEST_COOLDOWN = float(os.getenv("TEST_COOLDOWN", "0.5"))            # 批次失败后的基础等待(s)，会指数退避
+TEST_START_DELAY = float(os.getenv("TEST_START_DELAY", "0.1"))       # 启动每个并发任务前的微小延迟，避免突发性峰值
+TEST_MERGE_SKIP_HEADER = True                                           # 合并 CSV 时跳过后续文件头部
 
 # Telegram Bot 配置
 TG_BOT_TOKEN = os.getenv("TG_BOT_TOKEN")
@@ -76,16 +91,24 @@ def send_tg_notification(message: str) -> None:
 
 def send_tg_document(file_path: Path, caption: str) -> None:
     if not all([TG_BOT_TOKEN, TG_CHAT_ID, file_path.exists()]): return
-    print(f"🚀 正在发送结果文件 '{file_path.name}' 到 Telegram...")
     api_url = f"https://api.telegram.org/bot{TG_BOT_TOKEN}/sendDocument"
     payload = {'chat_id': TG_CHAT_ID, 'caption': caption, 'parse_mode': 'Markdown'}
-    try:
-        with file_path.open('rb') as f:
-            files = {'document': (file_path.name, f)}
-            requests.post(api_url, data=payload, files=files, timeout=60).raise_for_status()
-        print("✅ 文件成功发送到 Telegram！")
-    except requests.exceptions.RequestException as e:
-        print(f"❌ 发送文件到TG失败: {e}")
+    attempts = 0
+    while attempts < 3:
+        try:
+            attempts += 1
+            print(f"🚀 正在发送结果文件 '{file_path.name}' 到 Telegram... (尝试 {attempts})")
+            with file_path.open('rb') as f:
+                files = {'document': (file_path.name, f)}
+                requests.post(api_url, data=payload, files=files, timeout=60).raise_for_status()
+            print("✅ 文件成功发送到 Telegram！")
+            return
+        except requests.exceptions.RequestException as e:
+            print(f"❌ 发送文件到TG失败 (尝试 {attempts}): {e}")
+            if attempts < 3:
+                time.sleep(3)
+    # 最终失败，通知一次
+    send_tg_notification(f"❌ 文件发送到 Telegram 失败：{file_path.name}")
 
 def upload_to_custom_api(content: str) -> None:
     if not content.strip():
@@ -191,6 +214,9 @@ def determine_data_source() -> str:
         sys.exit(1)
 
 def choose_mode() -> str:
+    # 优先支持命令行参数（便于 bot 以参数方式启动）
+    if len(sys.argv) > 1 and sys.argv[1] in ("1", "2"):
+        return sys.argv[1]
     if not sys.stdin.isatty():
         mode = sys.stdin.readline().strip()
         if mode in ("1", "2"): return mode
@@ -232,19 +258,85 @@ def run_script(mode: str) -> None:
         sys.exit(1)
 
 def run_iptest(input_file: Path, output_csv: Path) -> None:
-    if not input_file.exists() or input_file.stat().st_size == 0: 
+    if not input_file.exists() or input_file.stat().st_size == 0:
         print(f"ℹ️ 跳过对 '{input_file.name}' 的测速，因为文件不存在或为空。")
         return
     print(f"--- [测速] 正在对 '{input_file.name}' 进行测速 ---")
-    cmd = [str(IPTEST_EXE), f"-file={input_file}", f"-outfile={output_csv}", f"-max={IPTEST_MAX}", f"-speedtest={IPTEST_SPEEDTEST}", f"-speedlimit={IPTEST_SPEEDLIMIT}", f"-delay={IPTEST_DELAY}", f"-url={SPEED_TEST_URL}"]
+
+    # 将输入拆分为多个批次，每个批次为一个临时文件，随后并发运行 iptest
+    total_lines = 0
+    with input_file.open('r', encoding='utf-8', errors='ignore') as rf:
+        for _ in rf:
+            total_lines += 1
+    if total_lines == 0:
+        print(f"ℹ️ '{input_file.name}' 中无有效数据，跳过测速")
+        return
+
+    batches = []
+    current = []
+    with input_file.open('r', encoding='utf-8', errors='ignore') as rf:
+        for line in rf:
+            if line.strip():
+                current.append(line.strip())
+            if len(current) >= TEST_BATCH_SIZE:
+                batches.append(current)
+                current = []
+        if current:
+            batches.append(current)
+
+    temp_dir = Path(tempfile.mkdtemp(prefix='iptest_'))
     try:
-        subprocess.run(cmd, check=True)
+        batch_outputs = []
+        def run_batch(batch_idx: int, lines: list, attempt: int = 1):
+            in_path = temp_dir / f'batch_{batch_idx}.txt'
+            out_path = temp_dir / f'batch_{batch_idx}.csv'
+            in_path.write_text('\n'.join(lines), encoding='utf-8')
+            time.sleep(TEST_START_DELAY * (attempt - 1))
+            cmd = [str(IPTEST_EXE), f"-file={in_path}", f"-outfile={out_path}", f"-max={IPTEST_MAX}", f"-speedtest={IPTEST_SPEEDTEST}", f"-speedlimit={IPTEST_SPEEDLIMIT}", f"-delay={IPTEST_DELAY}", f"-url={SPEED_TEST_URL}"]
+            try:
+                subprocess.run(cmd, check=True)
+                return out_path
+            except FileNotFoundError:
+                print(f"❌ 错误: 未找到 'iptest.exe'。请确保它位于脚本同目录下。")
+                raise
+            except subprocess.CalledProcessError as e:
+                if attempt <= TEST_RETRY:
+                    backoff = TEST_COOLDOWN * (2 ** (attempt - 1))
+                    print(f"❌ 批次 {batch_idx} 第 {attempt} 次尝试失败，等待 {backoff}s 后重试: {e}")
+                    time.sleep(backoff)
+                    return run_batch(batch_idx, lines, attempt + 1)
+                else:
+                    print(f"❌ 批次 {batch_idx} 达到最大重试次数，失败: {e}")
+                    raise
+
+        with ThreadPoolExecutor(max_workers=max(1, TEST_CONCURRENCY)) as ex:
+            futures = {ex.submit(run_batch, idx + 1, b): idx + 1 for idx, b in enumerate(batches)}
+            for fut in as_completed(futures):
+                try:
+                    res = fut.result()
+                    batch_outputs.append(res)
+                except Exception as e:
+                    print(f"❌ 某个批次执行失败: {e}")
+
+        # 合并批次输出
+        with output_csv.open('w', encoding='utf-8') as outf:
+            first = True
+            for p in batch_outputs:
+                if not p or not Path(p).exists():
+                    continue
+                with p.open('r', encoding='utf-8', errors='ignore') as bf:
+                    for i, line in enumerate(bf):
+                        if i == 0 and not first and TEST_MERGE_SKIP_HEADER:
+                            continue
+                        outf.write(line)
+                first = False
+
         print(f"✅ 测速完成，结果已保存到 '{output_csv.name}'。")
-    except FileNotFoundError: 
-        print(f"❌ 错误: 未找到 'iptest.exe'。请确保它位于脚本同目录下。")
-        sys.exit(1)
-    except subprocess.CalledProcessError as e: 
-        print(f"❌ iptest.exe 运行失败，返回码: {e.returncode}")
+    finally:
+        try:
+            shutil.rmtree(temp_dir)
+        except Exception:
+            pass
 
 def process_ip_csv(input_csv: Path) -> List[str]:
     if not input_csv.exists(): return []
@@ -296,6 +388,37 @@ def test_and_process_ips(input_file: Path, output_csv: Path) -> List[str]:
 # ==============================================================================
 def main() -> None:
     """主流程函数。"""
+    # 初始化日志与 PID 管理
+    logging.basicConfig(level=logging.INFO, filename=str(BASE_DIR / 'run.log'), filemode='a', format='%(asctime)s %(levelname)s: %(message)s')
+    logger = logging.getLogger(__name__)
+
+    pid_file = BASE_DIR / 'run.pid'
+
+    def write_pid():
+        try:
+            pid_file.write_text(str(os.getpid()), encoding='utf-8')
+        except Exception as e:
+            logger.exception('写入 PID 文件失败: %s', e)
+
+    def remove_pid():
+        try:
+            if pid_file.exists(): pid_file.unlink()
+        except Exception as e:
+            logger.exception('删除 PID 文件失败: %s', e)
+
+    def handle_termination(signum, frame):
+        logger.info('收到终止信号 (%s)，准备退出...', signum)
+        send_tg_notification('⚠️ IP 处理任务收到终止信号，正在退出...')
+        remove_pid()
+        sys.exit(0)
+
+    signal.signal(signal.SIGINT, handle_termination)
+    try:
+        signal.signal(signal.SIGTERM, handle_termination)
+    except Exception:
+        # Windows may not support SIGTERM in same way
+        pass
+
     if not all([SPEED_TEST_URL, TG_BOT_TOKEN, TG_CHAT_ID]):
         print("❌ 错误：.env 文件中的基础配置不完整 (SPEED_TEST_URL, TG_BOT_TOKEN, TG_CHAT_ID)。")
         sys.exit(1)
@@ -307,13 +430,16 @@ def main() -> None:
         print(f"==== IP 自动处理系统 (启动于: {start_time.strftime('%Y-%m-%d %H:%M:%S')}) ====")
         print("=" * 50)
 
+        # 写入 PID
+        write_pid()
+
         data_source = determine_data_source()
         send_tg_notification(f"🚀 *IP全流程处理任务开始*\n\n*数据源*: `{data_source}`\n*开始时间*: `{start_time.strftime('%Y-%m-%d %H:%M:%S')}`")
 
         mode = choose_mode()
         run_script(mode)
         
-        with ThreadPoolExecutor(max_workers=2, thread_name_prefix='IPTest') as executor:
+        with ThreadPoolExecutor(max_workers=max(1, TEST_CONCURRENCY), thread_name_prefix='IPTest') as executor:
             print("\n--- [步骤2: 并行测速] 已启动新旧IP并行测速 ---")
             future_new_ips = executor.submit(test_and_process_ips, IP_TXT, NEW_IP_TEST_RESULT_CSV)
             
@@ -373,6 +499,13 @@ def main() -> None:
         print(f"❌ [致命错误] 任务执行期间发生未捕获的异常: {e}")
         fail_message = f"❌ *IP全流程处理任务失败*\n\n*错误信息*: `{e}`\n\n`请检查服务器控制台日志获取详细信息。`"
         send_tg_notification(fail_message)
+    finally:
+        try:
+            # 清理PID文件
+            pid_f = BASE_DIR / 'run.pid'
+            if pid_f.exists(): pid_f.unlink()
+        except Exception:
+            pass
 
 if __name__ == "__main__":
     main()

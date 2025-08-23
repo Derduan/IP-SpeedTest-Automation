@@ -9,6 +9,7 @@
 - [健壮] 增加了完整的错误处理、下载进度条和自动清理功能。
 """
 import os
+import time
 import re
 import sys
 import shutil
@@ -39,21 +40,28 @@ TEMP_DIR = BASE_DIR / "temp_cmip_download"
 def download_file(url: str, dest_path: Path):
     """带进度条的文件下载函数。"""
     print(f"[*] 正在从 {url} 下载文件...")
-    try:
-        with requests.get(url, stream=True, timeout=60) as r:
-            r.raise_for_status()
-            total_size = int(r.headers.get('content-length', 0))
-            with dest_path.open('wb') as f, tqdm(
-                total=total_size, unit='iB', unit_scale=True, desc=dest_path.name
-            ) as bar:
-                for chunk in r.iter_content(chunk_size=8192):
-                    f.write(chunk)
-                    bar.update(len(chunk))
-        print(f"[+] 下载成功: {dest_path}")
-        return True
-    except requests.exceptions.RequestException as e:
-        print(f"[-] [致命错误] 下载文件失败: {e}")
-        return False
+    attempts = 0
+    while attempts < 3:
+        attempts += 1
+        try:
+            with requests.get(url, stream=True, timeout=60) as r:
+                r.raise_for_status()
+                total_size = int(r.headers.get('content-length', 0))
+                with dest_path.open('wb') as f, tqdm(
+                    total=total_size, unit='iB', unit_scale=True, desc=dest_path.name
+                ) as bar:
+                    for chunk in r.iter_content(chunk_size=8192):
+                        f.write(chunk)
+                        bar.update(len(chunk))
+            print(f"[+] 下载成功: {dest_path}")
+            return True
+        except requests.exceptions.RequestException as e:
+            print(f"[-] 下载失败(尝试 {attempts}): {e}")
+            if attempts < 3:
+                time.sleep(2)
+            else:
+                print(f"[-] [致命错误] 下载文件失败: {e}")
+                return False
 
 def extract_zip(zip_path: Path, extract_to: Path):
     """解压ZIP文件。"""

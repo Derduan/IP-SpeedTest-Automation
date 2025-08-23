@@ -27,6 +27,9 @@ AS210644_scan_result.csv
 396982-1737426586.csv
 亚洲20250722ip.txt
 proxyip .csv
+merged_proxies.txt
+run.log
+run.pid
 
 # 忽略常见的IDE/编辑器配置文件
 .vscode/

@@ -13,23 +13,7 @@ __pycache__/
 *.pyd
 
 # 忽略生成的临时文件和结果文件
-*.log
-new_ip_test_result.csv
-old_ip_test_result.csv
-ip.txt
-api_temp.txt
-final_ip_list.txt
-AS210644_scan_result.csv
-16509-1737416442.csv
-31898-1737422722.csv
-45102-1737422250.csv
-16509-1737446510.csv
-396982-1737426586.csv
-亚洲20250722ip.txt
-proxyip .csv
-merged_proxies.txt
-run.log
-run.pid
+
 
 # 忽略常见的IDE/编辑器配置文件
 .vscode/
